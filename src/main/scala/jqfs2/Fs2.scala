@@ -3,85 +3,80 @@ package jqfs2
 import jq._
 import fs2._
 import io.circe.{JsonObject, Json}
+import io.circe.syntax._
 
-object Fs2:
+type Filter[F[_]] = 
+    Pipe[F, io.circe.Json, io.circe.Json | jq.TypeError]
 
-    type Filter[F[_]] = 
-        Pipe[F, io.circe.Json, io.circe.Json | Error]
+given [F[_]]: Jq[Filter[F]] with 
+    def id: Filter[F] = 
+        identity
 
-    given [F[_]]: Jq[Filter[F]] with 
+    def str(s: String): Filter[F] = 
+        _ map: _ => 
+            Json.fromString(s)
 
-        object IsArray: 
-            def unapply(v: Json): Option[Vector[Json]] = 
-                v.asArray
+    def error(msg: String): Filter[F] = 
+        _ map: _ => 
+            TypeError.Custom(msg)
 
-        object IsObject: 
-            def unapply(v: Json): Option[JsonObject] = 
-                v.asObject
+    def iterator: Filter[F] = 
+        _ flatMap:
+            case IsObject(v) => Stream(v.values.toSeq*)
+            case IsArray(v) => Stream(v*)
+            case j => Stream(TypeError.CannotIterateOver(j))
+   
+    def array(f: Filter[F]): Filter[F] =
+        _ flatMap: json => 
+            f(Stream(json))
+                .fold(List[Json|TypeError]())(_ :+ _)
+                .flatMap: content => 
+                    content.lastOption match
+                        case Some(error: TypeError) => Stream(error)
+                        case _ => Stream(Json.arr(content.collect{ case j: Json => j }*))
 
-        object IsString: 
-            def unapply(v: Json): Option[String] = 
-                v.asString
-
-        def id: Filter[F] = 
-            identity
-
-        def str(s: String): Filter[F] = 
-            _ map: _ => 
-                Json.fromString(s)
-
-        def error(msg: String): Filter[F] = 
-            _ map: _ => 
-                Error.Custom(msg)
-
-        def iterator: Filter[F] = 
-            _ flatMap:
-                case IsArray(v) => Stream(v*)
-                case j => Stream(Error.CannotIterateOver(j))
-
-        extension (f1: Filter[F])
-            def |(f2: Filter[F]): Filter[F] = 
-                _ flatMap: v => 
-                    f1(Stream(v)) flatMap:
-                        case e: Error => Stream(e)
-                        case j: Json => 
-                            f2(Stream(j)).takeThrough: 
-                                case j: Json => true
-                                case _ => false
-                    
-
-            def concat(f2: Filter[F]): Filter[F] = 
-                _.flatMap: json => 
-                    (f1(Stream(json)) ++ f2(Stream(json)))
-                        .takeThrough: 
+    extension (f1: Filter[F])
+        def |(f2: Filter[F]): Filter[F] = 
+            _ flatMap: v => 
+                f1(Stream(v)) flatMap:
+                    case e: TypeError => Stream(e)
+                    case j: Json => 
+                        f2(Stream(j)).takeThrough: 
                             case j: Json => true
                             case _ => false
+                
+        def concat(f2: Filter[F]): Filter[F] = 
+            _.flatMap: json => 
+                (f1(Stream(json)) ++ f2(Stream(json)))
+                    .takeThrough: 
+                        case j: Json => true
+                        case _ => false
 
-            private def indexObj(key: String)(v: Json): Stream[F, Json | Error] = 
-                f1(Stream(v)) map: 
-                    case IsObject(obj) => obj(key).getOrElse(Json.Null)
-                    case j: Json => Error.CannotIndex(j)
-                    case error => error
+        private def indexArray(idx: Int): Filter[F] =
+            _.flatMap: v1 => 
+                f1(Stream(v1)).flatMap:
+                    case e: TypeError => Stream(e)
+                    case IsArray(vec) => Stream(vec.lift(idx).getOrElse(Json.Null))
+                    case v2: Json => Stream(TypeError.CannotIndex(v2, idx.asJson)) 
+                        
+        private def indexObj(key: String): Filter[F] =
+            _.flatMap: v1 => 
+                f1(Stream(v1)).flatMap:
+                    case e: TypeError => Stream(e)
+                    case IsObject(obj) => Stream(obj(key).getOrElse(Json.Null))
+                    case v2: Json => Stream(TypeError.CannotIndex(v2, key.asJson))     
 
-            def index(f2: Filter[F]): Filter[F] = 
-                _ flatMap: v => 
-                    f2(Stream(v)) flatMap:
-                        case IsString(s) => indexObj(s)(v)
-                        case k: Json => Stream(Error.CannotIndexObjectWith(k))
-                        case error => Stream(error)
+        def index(keyF: Filter[F]): Filter[F] = 
+            _.flatMap: v => 
+                keyF(Stream(v)) flatMap:
+                    case e: TypeError => Stream(e)
+                    case IsInt(idx) => indexArray(idx)(Stream(v))
+                    case IsString(str) => indexObj(str)(Stream(v))
+                    case k: Json => Stream(TypeError.CannotIndex(what = v, _with = k))
 
-            def `catch`(f2: Filter[F]): Filter[F] = 
-                _ flatMap: j => 
-                    f1(Stream(j)) flatMap:
-                        case j: Json => Stream(j)
-                        case e: Error => 
-                            f2(Stream(Json.fromString(e.toString)))
-
-        def array(f: Filter[F]): Filter[F] =
-            _ flatMap: json => 
-                f(Stream(json))
-                    .fold(List[Json|Error]())(_ :+ _)
-                    .flatMap: content => 
-                        content.lastOption match
-                            case Some(error: Error) => Stream(error)
-                            case _ => Stream(Json.arr(content.collect{ case j: Json => j }*))
+        def `catch`(f2: Filter[F]): Filter[F] = 
+            _ flatMap: j => 
+                f1(Stream(j)) flatMap:
+                    case j: Json => Stream(j)
+                    case e: TypeError => 
+                        f2(Stream(Json.fromString(e.toString)))

@@ -7,14 +7,14 @@ import cats.effect.IO
 
 import jq._
 
-given Fs2Run: RunnableFilter[Fs2.Filter[IO]] with
+given Fs2Run: RunnableFilter[Filter[IO]] with
 
     extension [A](st: Stream[IO, A])
         def run: List[A] = 
             st.compile.toList.unsafeRunSync()
             
     extension (input: List[Json])
-        def through(r: Fs2.Filter[IO]): List[Json | Error] = 
+        def throughJson(r: Filter[IO]): List[Json | TypeError] = 
             r(Stream[IO, Json](input*))
                 .run
 

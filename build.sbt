@@ -17,6 +17,7 @@ lazy val root = project
       "io.circe" %% "circe-core" % circeVersion,
       "co.fs2" %% "fs2-core" % fs2Version,
       "jqscala" %% "jqscala" % jqVersion,
+      "jqscala" %% "jqscala" % jqVersion classifier "tests",
       "org.scalatest" %% "scalatest" % scalatestVersion % Test
     )
   )

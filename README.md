@@ -1,8 +1,5 @@
-## sbt project compiled with Scala 3
+This repository contains the fs2 implementation of the [Scala embedding](https://github.com/jqscala/jqscala) of the [`jq`](https://jqlang.github.io/jq/) language. 
 
-### Usage
+Currently, this repository just contains a preliminary implementation of a few jq filters. This is very much work in progress. 
 
-This is a normal sbt project. You can compile code with `sbt compile`, run it with `sbt run`, and `sbt console` will start a Scala 3 REPL.
-
-For more information on the sbt-dotty plugin, see the
-[scala3-example-project](https://github.com/scala/scala3-example-project/blob/main/README.md).
+This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc-sa/4.0/">Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License</a>.
