@@ -31,8 +31,8 @@ lazy val root = project
     libraryDependencies ++= Seq(
       "io.circe" %% "circe-core" % circeVersion,
       "co.fs2" %% "fs2-core" % fs2Version,
-      "jqscala" %% "jqscala" % jqVersion,
-      "jqscala" %% "jqscala" % jqVersion classifier "tests",
+      "io.github.jqscala" %% "jqscala" % jqVersion,
+      "io.github.jqscala" %% "jqscala" % jqVersion classifier "tests",
       "org.scalatest" %% "scalatest" % scalatestVersion % Test
     )
   )
