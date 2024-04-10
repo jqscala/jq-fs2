@@ -6,6 +6,8 @@
 name: Scala CI
 
 on:
+  push:
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
@@ -26,4 +28,9 @@ jobs:
           distribution: 'temurin'
           cache: 'sbt'
       - name: Run tests
-        run: sbt test
+        run: sbt coverage test coverageReport
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4.0.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: jqscala/jq-fs2
